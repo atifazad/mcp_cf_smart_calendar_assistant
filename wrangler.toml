@@ -1,0 +1,29 @@
+name = "mcp-cf-smart-calendar-assistant"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[env.development]
+name = "mcp-cf-smart-calendar-assistant-dev"
+
+[env.production]
+name = "mcp-cf-smart-calendar-assistant-prod"
+
+# Durable Objects
+[[durable_objects.bindings]]
+name = "USER_PREFERENCES"
+class_name = "UserPreferences"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["UserPreferences"]
+
+# Environment variables
+[vars]
+ENVIRONMENT = "development"
+
+# Secrets (to be set via wrangler secret put)
+# GOOGLE_CLIENT_ID
+# GOOGLE_CLIENT_SECRET
+# GOOGLE_REDIRECT_URI
+# AI_MODEL = "mistral-7b-instruct-v0.2" 
