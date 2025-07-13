@@ -90,20 +90,6 @@ npm run deploy
 
 ## 🔧 Development
 
-### Project Structure
-
-```
-src/
-├── index.ts                 # Main Worker entry point
-├── types/                   # TypeScript type definitions
-├── durable-objects/         # Durable Objects for state
-├── services/               # Business logic services
-│   ├── calendar.ts         # Google Calendar integration
-│   ├── ai.ts              # AI Agent SDK integration
-│   └── mcp.ts             # MCP server implementation
-└── utils/                  # Utility functions
-```
-
 ### Available Scripts
 
 - `npm run dev` - Start local development server

@@ -1,5 +1,6 @@
 import { UserPreferencesDO } from './durable-objects/UserPreferences';
 import { Env } from './types';
+import './styles.css';
 
 export { UserPreferencesDO as UserPreferences };
 
