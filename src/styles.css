@@ -146,6 +146,52 @@ body {
   margin-bottom: 0.5rem;
 }
 
+.welcome-message p {
+  margin: 0.5rem 0;
+  color: var(--gray-600);
+}
+
+.app.dark .welcome-message p {
+  color: var(--gray-300);
+}
+
+.auth-button {
+  margin-top: 1rem;
+  padding: 0.75rem 1.5rem;
+  background-color: var(--success-color);
+  color: var(--white);
+  border: none;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.auth-button:hover {
+  background-color: #28a745;
+}
+
+.tool-result {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background-color: var(--gray-50);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-family: 'Courier New', monospace;
+  overflow-x: auto;
+}
+
+.app.dark .tool-result {
+  background-color: var(--gray-800);
+}
+
+.tool-result pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .message {
   display: flex;
   flex-direction: column;

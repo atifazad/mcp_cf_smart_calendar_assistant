@@ -3,11 +3,9 @@ main = "src/index.ts"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
 
-[env.development]
-name = "mcp-cf-smart-calendar-assistant-dev"
-
-[env.production]
-name = "mcp-cf-smart-calendar-assistant-prod"
+# AI Model Binding
+[ai]
+binding = "AI"
 
 # Durable Objects
 [[durable_objects.bindings]]
@@ -16,14 +14,31 @@ class_name = "UserPreferences"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["UserPreferences"]
+new_sqlite_classes = ["UserPreferences"]
 
 # Environment variables
 [vars]
 ENVIRONMENT = "development"
+AI_MODEL = "llama-3.1-8b-instruct"  # Default: llama-3.1-8b-instruct. Can be changed to: mistral-7b-instruct-v0.2, llama-3.1-70b-instruct
+
+[env.production]
+name = "mcp-cf-smart-calendar-assistant-prod"
+
+# AI Model Binding for production
+[env.production.ai]
+binding = "AI"
+
+# Durable Objects for production
+[[env.production.durable_objects.bindings]]
+name = "USER_PREFERENCES"
+class_name = "UserPreferences"
+
+# Environment variables for production
+[env.production.vars]
+ENVIRONMENT = "production"
+AI_MODEL = "@cf/meta/llama-3.1-70b-instruct"
 
 # Secrets (to be set via wrangler secret put)
 # GOOGLE_CLIENT_ID
 # GOOGLE_CLIENT_SECRET
-# GOOGLE_REDIRECT_URI
-# AI_MODEL = "mistral-7b-instruct-v0.2" 
+# GOOGLE_REDIRECT_URI 

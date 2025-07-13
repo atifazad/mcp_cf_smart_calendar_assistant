@@ -2,6 +2,8 @@ import { UserPreferencesDO } from './durable-objects/UserPreferences';
 import { Env } from './types';
 import { GoogleCalendarAuth } from './auth/google-calendar';
 import { GoogleCalendarAPI } from './services/google-calendar';
+import { AIAgent, AIMessage } from './services/ai-agent';
+import { executeTool, getToolSchema } from './tools/calendar-tools';
 import './styles.css';
 
 export { UserPreferencesDO as UserPreferences };
@@ -217,41 +219,43 @@ async function handleCalendarAPI(request: Request, env: Env): Promise<Response> 
 
   try {
     if (path === '/events') {
-      const params = new URLSearchParams(url.search);
-      const timeMin = params.get('timeMin') || new Date().toISOString();
-      const timeMax = params.get('timeMax') || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-      
-      const events = await calendarAPI.listEvents('primary', {
-        timeMin,
-        timeMax,
-        singleEvents: true,
-        orderBy: 'startTime',
-      });
+      if (request.method === 'GET') {
+        const params = new URLSearchParams(url.search);
+        const timeMin = params.get('timeMin') || new Date().toISOString();
+        const timeMax = params.get('timeMax') || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+        
+        const events = await calendarAPI.listEvents('primary', {
+          timeMin,
+          timeMax,
+          singleEvents: true,
+          orderBy: 'startTime',
+        });
 
-      return new Response(
-        JSON.stringify({ events }),
-        { 
-          headers: { 
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-          } 
-        }
-      );
-    }
+        return new Response(
+          JSON.stringify({ events }),
+          { 
+            headers: { 
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*'
+            } 
+          }
+        );
+      }
 
-    if (path === '/events' && request.method === 'POST') {
-      const eventData = await request.json() as any;
-      const event = await calendarAPI.createEvent('primary', eventData);
+      if (request.method === 'POST') {
+        const eventData = await request.json() as any;
+        const event = await calendarAPI.createEvent('primary', eventData);
 
-      return new Response(
-        JSON.stringify({ event }),
-        { 
-          headers: { 
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-          } 
-        }
-      );
+        return new Response(
+          JSON.stringify({ event }),
+          { 
+            headers: { 
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*'
+            } 
+          }
+        );
+      }
     }
 
     if (path === '/free-time') {
@@ -328,11 +332,159 @@ async function handleCalendarAPI(request: Request, env: Env): Promise<Response> 
 async function handleAIAPI(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname.replace('/api/ai', '');
+  const aiAgent = new AIAgent(env);
 
-  // For now, return a placeholder response
+  if (path === '/chat') {
+    if (request.method === 'POST') {
+      try {
+        const { message, stream = false } = await request.json() as { message: string; stream?: boolean };
+        
+        // Get user's OAuth tokens for calendar access
+        const userId = 'default';
+        const userPreferencesId = env.USER_PREFERENCES.idFromName(userId);
+        const userPreferences = env.USER_PREFERENCES.get(userPreferencesId);
+        
+        const tokensResponse = await userPreferences.fetch('http://localhost/oauth-tokens');
+        if (!tokensResponse.ok) {
+          return new Response(
+            JSON.stringify({ error: 'Please authenticate with Google Calendar first' }),
+            { 
+              status: 401, 
+              headers: { 
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+              } 
+            }
+          );
+        }
+
+        const tokensData = await tokensResponse.json() as { tokens?: any };
+        const tokens = tokensData.tokens;
+        if (!tokens || !tokens.access_token) {
+          return new Response(
+            JSON.stringify({ error: 'No valid access token found. Please re-authenticate.' }),
+            { 
+              status: 401, 
+              headers: { 
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+              } 
+            }
+          );
+        }
+
+        const calendarAPI = new GoogleCalendarAPI(tokens.access_token);
+
+        // Create conversation messages
+        const messages: AIMessage[] = [
+          { role: 'system', content: aiAgent.createSystemPrompt() },
+          { role: 'user', content: aiAgent.createUserPrompt(message) }
+        ];
+
+        if (stream) {
+          // Return streaming response
+          const stream = await aiAgent.generateStreamingResponse(messages);
+          return new Response(stream, {
+            headers: {
+              'Content-Type': 'text/plain; charset=utf-8',
+              'Access-Control-Allow-Origin': '*'
+            }
+          });
+        } else {
+          // Return regular response
+          const response = await aiAgent.generateResponse(messages);
+          
+          // Execute any tool calls
+          if (response.toolCalls && response.toolCalls.length > 0) {
+            const toolResults = [];
+            for (const toolCall of response.toolCalls) {
+              try {
+                const result = await executeTool(toolCall.name, toolCall.parameters, calendarAPI);
+                toolResults.push({ tool: toolCall.name, result });
+              } catch (error) {
+                toolResults.push({ tool: toolCall.name, error: (error as Error).message });
+              }
+            }
+            
+            return new Response(
+              JSON.stringify({ 
+                response: response.content,
+                toolResults 
+              }),
+              { 
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Access-Control-Allow-Origin': '*'
+                } 
+              }
+            );
+          }
+
+          return new Response(
+            JSON.stringify({ response: response.content }),
+            { 
+              headers: { 
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+              } 
+            }
+          );
+        }
+      } catch (error) {
+        console.error('AI API error:', error);
+        return new Response(
+          JSON.stringify({ error: 'AI processing failed', details: (error as Error).message }),
+          { 
+            status: 500, 
+            headers: { 
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*'
+            } 
+          }
+        );
+      }
+    }
+  }
+
+  if (path === '/models') {
+    // Return available models for A/B testing
+    const models = aiAgent.getAvailableModels();
+    return new Response(
+      JSON.stringify({ 
+        models,
+        currentModel: aiAgent.getCurrentModel()
+      }),
+      { 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        } 
+      }
+    );
+  }
+
+  if (path === '/tools') {
+    // Return available tools
+    const tools = getToolSchema();
+    return new Response(
+      JSON.stringify({ tools }),
+      { 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        } 
+      }
+    );
+  }
+
   return new Response(
     JSON.stringify({ 
       message: 'AI API endpoint',
+      availableEndpoints: [
+        'POST /api/ai/chat - Chat with AI assistant',
+        'GET /api/ai/models - List available models',
+        'GET /api/ai/tools - List available tools'
+      ],
       path,
       method: request.method 
     }),

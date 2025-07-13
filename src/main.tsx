@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
+import { buildApiUrl, currentConfig } from './config';
 import './styles.css';
 
 interface Message {
@@ -23,6 +24,7 @@ function App() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -48,17 +50,57 @@ function App() {
     setInput('');
     setIsLoading(true);
 
-    // Simulate AI response for now
-    setTimeout(() => {
+    try {
+      const response = await fetch(buildApiUrl('/api/ai/chat'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: input,
+          sessionId: 'web-interface-session'
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'Hello! I\'m your AI calendar assistant. I can help you manage your schedule, find free time, and create meetings. What would you like to do?',
+        content: data.response || 'I received your message but had trouble processing it.',
+        timestamp: new Date(),
+        tools: data.toolResults ? data.toolResults.map((tool: any, index: number) => ({
+          id: `tool-${index}`,
+          name: tool.tool,
+          parameters: tool.parameters || {},
+          status: tool.error ? 'error' : 'executed',
+          result: tool.result
+        })) : undefined
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('Error calling AI API:', error);
+      
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: 'Sorry, I encountered an error while processing your request. Please try again or check your authentication.',
         timestamp: new Date(),
       };
-      setMessages(prev => [...prev, assistantMessage]);
+
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
+  };
+
+  const handleAuthenticate = () => {
+    window.open(currentConfig.authUrl, '_blank');
   };
 
   const toggleTheme = () => {
@@ -90,6 +132,10 @@ function App() {
                 <li>Suggest breaks between back-to-back meetings</li>
               </ul>
               <p>Try asking: "What meetings do I have today?" or "Find me 2 hours for deep work"</p>
+              <p><strong>API Endpoint:</strong> {currentConfig.baseUrl}</p>
+              <button onClick={handleAuthenticate} className="auth-button">
+                🔐 Authenticate with Google Calendar
+              </button>
             </div>
           )}
           
@@ -103,6 +149,11 @@ function App() {
                       <div key={tool.id} className={`tool ${tool.status}`}>
                         <span className="tool-name">{tool.name}</span>
                         <span className="tool-status">{tool.status}</span>
+                        {tool.result && (
+                          <div className="tool-result">
+                            <pre>{JSON.stringify(tool.result, null, 2)}</pre>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

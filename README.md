@@ -63,7 +63,7 @@ Create a `.dev.vars` file for local development:
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REDIRECT_URI=http://localhost:8787/auth/callback
-AI_MODEL=mistral-7b-instruct-v0.2
+AI_MODEL=llama-3.1-8b-instruct
 ENVIRONMENT=development
 ```
 
