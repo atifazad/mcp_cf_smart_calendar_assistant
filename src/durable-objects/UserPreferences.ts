@@ -1,5 +1,13 @@
 import { UserPreferences, ConversationState } from '../types';
 
+interface OAuthTokens {
+  access_token: string;
+  refresh_token?: string;
+  expires_in: number;
+  token_type: string;
+  expires_at: number; // Unix timestamp when token expires
+}
+
 export class UserPreferencesDO {
   private state: DurableObjectState;
   private env: any;
@@ -52,6 +60,14 @@ export class UserPreferencesDO {
       );
     }
 
+    if (path === '/oauth-tokens') {
+      const tokens = await this.state.storage.get('oauth_tokens');
+      return new Response(
+        JSON.stringify({ tokens }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
     return new Response('Not found', { status: 404 });
   }
 
@@ -82,6 +98,21 @@ export class UserPreferencesDO {
       );
     }
 
+    if (path === '/oauth-tokens') {
+      const tokens: OAuthTokens = await request.json();
+      
+      // Calculate expiration time
+      const expiresAt = Date.now() + (tokens.expires_in * 1000);
+      tokens.expires_at = expiresAt;
+
+      await this.state.storage.put('oauth_tokens', tokens);
+
+      return new Response(
+        JSON.stringify({ success: true }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
     return new Response('Not found', { status: 404 });
   }
 
@@ -102,6 +133,14 @@ export class UserPreferencesDO {
   private async handleDelete(path: string): Promise<Response> {
     if (path === '/conversation') {
       await this.state.storage.delete('conversation');
+      return new Response(
+        JSON.stringify({ success: true }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (path === '/oauth-tokens') {
+      await this.state.storage.delete('oauth_tokens');
       return new Response(
         JSON.stringify({ success: true }),
         { headers: { 'Content-Type': 'application/json' } }
